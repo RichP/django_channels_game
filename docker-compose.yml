@@ -1,0 +1,30 @@
+version: '3.7'
+
+services: 
+    web:
+        build: .
+        command: python /code/manage.py runserver 0.0.0.0:8000
+        environment: 
+            - SECRET_KEY=9(^wp2ehg3w%1aa5qj^wv2!ud$$%oczfl5k+lpa46csd2254b8e
+            - DEBUG=1
+            - ENVIRONMENT=development
+        volumes: 
+            - .:/code
+        ports: 
+            - 8000:8000
+        depends_on: 
+            - db
+            - redis
+    db:
+        image: postgres:11
+        volumes: 
+            - postgres_data:/var/lib/postgresql/data/
+        environment: 
+            - "POSTGRES_HOST_AUTH_METHOD=trust"
+    redis:
+        image: redis
+        ports:
+            - "6379:6379"
+
+volumes: 
+    postgres_data:

@@ -1,0 +1,321 @@
+{% extends 'base.html' %}
+
+{% block title %}Play Obstruction{% endblock title %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-12">
+        <h3>Play Obstruction! Now!</h3>
+        <hr>
+        <div class="row row-with-wide-cards">
+            <div class="col-md-12 d-flex align-items-stretch">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Playing {{ game }}</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row justify-content-center">
+                            <div class="col-sm-2 col-sm-offset-3">
+                                <div>
+                                    <div><h4>{{game.creator}}</h4></div>
+                                    <span><img src="/static/img/blue-player.png"></span>
+                                </div>
+                            </div>
+                            <div class="col-sm-2 text-center">
+                                <h2 style="height:100px;line-height:100px;">VS</h2>
+                            </div>
+                            <div class="col-sm-2">    
+                                <div>
+                                    <div><h4>{{game.opponent}}</h4></div>
+                                    <span><img src="/static/img/red-player.png"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row justify-content-center">
+        <div class="col-lg-12 d-flex align-items-stretch">
+            <div class="card">
+                <div class="card-body" data-game={{game.id}} id="game_component">
+                    <!-- game is rendered here -->
+                    <div id="game-name">{{ game.id }}</div>
+                     <div class="row">
+                        <div class="col"> 
+                            <h3><span id="current_turn_label">Current Turn:</span> 
+                                <span class="text-primary" id="current_turn">{{ game.current_turn.username }}</span>
+                            </h3>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <table>
+                                <tbody id="game_board">
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col logCol">
+
+                            <div >
+                                <h3>Game Log</h3>
+                                    <ul id="game_log" class="list-group chat-list">
+
+                                        <li key=1 class="list-group-item">
+                                        <span class="float-left badge badge-pill badge-secondary player-badge">
+                                                A Player
+                                        </span>
+                                                <span>Message1</span>
+                                        </li> 
+
+                                        <li key=2 class="list-group-item">
+                                        <span class="float-left badge badge-pill badge-secondary player-badge">
+                                                A Player
+                                        </span>
+                                                <span>Message2</span>
+                                        </li> 
+
+                                        <li key=3 class="list-group-item">
+                                        <span class="float-left badge badge-pill badge-secondary player-badge">
+                                                A Player
+                                        </span>
+                                                <span>Message3</span>
+                                        </li> 
+                                    </ul>
+                                <div class="input-group">
+                                    <input id="log_chat" type="text" class="form-control" placeholder="Type to chat..."/>
+                                    <span class="input-group-btn">
+                                        <button onClick="OnChatMessage(this);return false;" class="btn btn-primary" type="button">Say It</button>
+                                    </span>
+                                </div>
+             
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock content %}
+
+{% block page_javascript %}
+    <script>
+        var squares = []
+        const gameName = JSON.parse(document.getElementById('game-name').textContent);
+        const gameUrl = 'http://' + window.location.host + "/game-from-id/" + gameName;
+        const userUrl = 'http://' + window.location.host + "/current-user/";
+        const gameSquares = 'http://' + window.location.host + "/game_squares/" + gameName;
+        const gameSocket = new WebSocket(
+            'ws://'
+            + window.location.host
+            + "/game/"
+            + gameName + "/"
+       ); 
+
+        const creator_icon = '<img src="/static/img/blue-player.png" />'
+        const creator_surround_icon = '<img src="/static/img/blue-surrounding.png"/>'
+        const opponent_icon = '<img src="/static/img/red-player.png" />'
+        const opponent_surround_icon = '<img src="/static/img/red-surrounding.png"/>'
+        const empty_icon = '<img src="/static/img/empty.png" />'
+
+        var current_user
+        var creatorId
+        var game
+        var squares
+        var logs
+        
+        window.onload = function() {
+            fetchCurrentUser((xhr)=> {
+            //var results = document.getElementById('user');
+            if (xhr.responseType === 'json') {
+               current_user = xhr.response;
+               //results.innerHTML = currentUser.username;
+            } else {
+              //results.innerHTML = JSON.parse(xhr.responseText).message;
+            }
+            getGame();
+          });
+            
+        }; 
+
+        gameSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            game = data.object.game;
+            squares = data.object.squares;
+            logs = data.object.log;
+            console.log(logs);
+            renderSquares(squares);
+            renderLog();
+        };
+
+        gameSocket.onclose = function(e) {
+            console.error('Chat socket closed unexpectedly');
+            console.error(e);
+        };
+
+
+        function fetchCurrentUser(callback) {
+            fetch(userUrl, (xhr)=> {
+                callback(xhr)
+                });
+        }
+
+        function isPlayerTurn() {
+            console.log("isPlayerTurn");
+            console.log(current_user.id);
+            console.log(game);
+            return current_user.id == game.current_turn.id;
+        }
+
+        function getGame() {
+          var results = document.getElementById('game_board');
+          fetch(gameUrl, (xhr)=> {
+            if (xhr.responseType === 'json') {
+                var result = xhr.response;
+                game = result.game
+                logs = result.log
+                creatorId = result.game.creator.id
+                squares = result.squares;
+                renderSquares(squares);
+                renderLog();
+            } else {
+                results.innerHTML = JSON.parse(xhr.responseText).message;
+            }
+          });
+        }
+
+        function renderLog() {
+            var logList = document.getElementById('game_log');
+            //'id', 'text', 'player', 'created'
+
+            var items = new Array()
+            for( i = 0; i < logs.length; i++) {
+                var logData = logs[i];
+                var playerName = "System";
+                var color = ''
+                if(logData.player != null) {
+                    playerName = logData.player.username
+                    if(creatorId === logData.player.id) {
+                        color = "creator-color";
+                    } else {
+                        color = "opponent-color";
+                    }
+                }
+                var logItem = [
+                    '<li key=' + logData.id + ' class="list-group-item">',
+                    '<span class="float-left badge badge-pill badge-secondary ' + color + ' player-badge">',
+                    playerName,
+                    '</span>',
+                    '<span>' + logData.text + '</span>',
+                    '</li> '].join('\n');
+
+                items.push(logItem)
+            }
+            logList.innerHTML = items.join('\n');
+            logList.scrollTop = logList.scrollHeight - logList.clientHeight
+        }
+
+        function renderSquares(squares) {
+            var turnLabel = document.getElementById('current_turn_label');
+            
+            if(game.completed != null) {
+                turnLabel.innerHTML = "The Winner:";
+            } else {
+                turnLabel.innerHTML = "Current Turn:";
+            }
+            
+            
+            var whosTurn = document.getElementById('current_turn');
+            whosTurn.innerHTML = game.current_turn.username;
+            var results = document.getElementById('game_board');
+            let cur_row = -1;
+
+            var table_rows = new Array();
+            var sSquares = squares.sort(function(a, b) {
+                        return a.row < b.row ? -1 : 1;
+                        });
+            for( i = 0; i < sSquares.length; i++) {
+                var square = sSquares[i];
+                if (square.row != cur_row){
+                    cur_row = square.row
+                    var cols = sSquares.filter(function(square) {
+                        return square.row == cur_row
+                    });
+                    var sCols = cols.sort(function(a, b) {
+                        return a.col < b.col ? -1 : 1;
+                        })
+                    var td = drawRow(cur_row, sCols);
+                    table_rows.push(td);
+                }
+            }
+
+            if(!table_rows.length) {
+                results.innerHTML = '<tr><td>LOADING...</td></tr>';
+            } else {
+                results.innerHTML = table_rows.join('\n');
+            }
+        }
+
+        function drawRow(row, cols) {
+            console.log('row: ' + row + 'num cols: ' + cols.length);
+            return '<tr key="'+row+'">'+ drowCols(cols) +'</tr>';
+        }
+
+        function drowCols(cols) {
+            var trs = new Array();
+            for(loop = 0; loop < cols.length; loop++) {
+                 var col = cols[loop];
+                 //console.log(col);
+                 var square = [
+                    '<td data-id="'+ col.id  +'" data-ownerId='+ col.owner  +' onClick="OnClaimClick(this);return false;" height="60" width="60">',
+                    imgFromStatus(col),
+                    '<div class="coords">'+ col.row + ', ' + col.col + '</div>',
+                    '</td>'].join('\n');
+                trs.push(square);
+            }
+            return trs.join('\n');
+        }
+
+        function imgFromStatus(col) {
+            var blue = creatorId === col.owner
+            if(col.status === 'FREE') {
+                return empty_icon;
+            }
+            if(col.status === 'Selected') {
+                return blue ? creator_icon : opponent_icon;
+            }
+            if(col.status === 'Surrounding') {
+                return blue ? creator_surround_icon : opponent_surround_icon;
+            }
+        }
+
+        function fetch(url, callback) {
+          var oReq = new XMLHttpRequest();
+          oReq.onload = function (e) {
+            var xhr = e.target;
+            callback(xhr);
+          };
+          oReq.open('GET', url, true);
+          oReq.responseType = 'json';
+          oReq.send();
+        }
+
+        function OnChatMessage() {
+            var textValue = document.getElementById("log_chat").value;
+            gameSocket.send(JSON.stringify({action: "chat_text_entered", text: textValue, game_id: game.id}));
+        }
+
+        function OnClaimClick(d) {
+            var tile_id = d.getAttribute("data-id");
+            var owner_id = d.getAttribute("data-ownerId");
+            if(isPlayerTurn()) {
+                if(owner_id === "null") {
+                    gameSocket.send(JSON.stringify({action: "claim_square", square_id: tile_id}));
+                }
+            }
+        }
+    </script>
+{% endblock page_javascript %}

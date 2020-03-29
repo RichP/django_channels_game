@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+
+{% block title %}Lobby{% endblock title %}
+
+{% block content %}
+<h3>Let's play obstruction, <span class="text-primary">{{request.user.username}}</span></h3>
+<hr>
+    {{ room_name|json_script:"room-name" }}
+
+ <div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div>
+      <div class="card">
+          <div class="card-header text-white bg-primary mb-3">
+            <span>Your Games</span>
+            <a href="#" class="float-right badge badge-light" onClick="OnCreateClick();return false;" id="create_game">Start New Game</a>
+          </div>
+                <div class="card-body">
+                          <div>
+                            <ul class="list-group games-list" id="results">
+                              {% for game in player_games %}
+                                  <li key={game.id} class="list-group-item">
+                                    <span class="badge float-left">{{ game.id }}</span>
+                                    <span>{{ game.creator.username }}</span> vs ??? <!--span>{this.renderOpponent(game)}</span-->
+ 
+                                    <a class="btn btn-sm btn-primary float-right" href={"/game/"+game.id+"/"}>View</a>
+                                  </li>
+                              {% endfor %}
+                            </ul>
+                          </div>
+                </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div>
+      <div class="card">
+          <div class="card-header text-white bg-primary mb-3">
+            <span>Available Games</span>
+          </div>
+                <div class="card-body">
+                          <div>
+                            <ul class="list-group games-list" id="available">
+                              {% for game in available_games %}
+                                  <li key={game.id} class="list-group-item">
+                                    <span class="badge float-left">{{ game.id }}</span>
+                                    <span>{{ game.creator }}</span> vs ??? <!--span>{this.renderOpponent(game)}</span-->
+ 
+                                    <a class="btn btn-sm btn-primary float-right" href={"/game/"+game.id+"/"}>View</a>
+                                  </li>
+                              {% endfor %}
+                            </ul>
+                          </div>
+                </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock content %}
+
+{% block page_javascript %} 
+<script>
+        const roomName = JSON.parse(document.getElementById('room-name').textContent);
+
+        const chatSocket = new WebSocket(
+            'ws://'
+            + window.location.host
+            + "/lobby/"
+        ); 
+
+        const playerGamesUrl = 'http://' + window.location.host + "/player-games/";
+        const availableGamesUrl = 'http://' + window.location.host + "/available-games/";
+        const userUrl = 'http://' + window.location.host + "/current-user/";
+
+        var currentUser
+        
+        window.onload = function() {
+          fetchCurrentUser((xhr)=> {
+            if (xhr.responseType === 'json') {
+               currentUser = xhr.response;
+            } else {
+              results.innerHTML = JSON.parse(xhr.responseText).message;
+            }
+            fetchPlayerGames();
+            fetchAvailableGames();
+          });
+        }; 
+
+        chatSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            fetchPlayerGames();
+            fetchAvailableGames();
+        };
+
+        chatSocket.onclose = function(e) {
+            console.error('Chat socket closed unexpectedly');
+        };
+
+        document.querySelector('#create_game').onclick = function(e) {
+            chatSocket.send(JSON.stringify({
+                'action': "create_game"
+            }));
+        };
+
+        function fetchCurrentUser(callback) {
+            fetch(userUrl, (xhr)=> {
+                callback(xhr)
+                });
+        }
+
+        function fetchPlayerGames() {
+          var results = document.getElementById('results');
+          fetch(playerGamesUrl, (xhr)=> {
+            if (xhr.responseType === 'json') {
+                var objects = xhr.response;
+                var items = new Array()
+                for (i = 0; i < objects.length; i++) { 
+                  var game = objects[i];
+                  var id = game.id
+                  var username = game.creator.username
+                  var btnText = buttonText(game)
+                  var opName = oponentName(game)
+                   
+                  items.push(createGameItem(id,username,opName,btnText))
+                }
+                if(!items.length) {
+                  results.innerHTML = "No Games"
+                } else {
+                  results.innerHTML = items.join('\n')
+                }
+                
+            } else {
+                results.innerHTML = JSON.parse(xhr.responseText).message;
+            }
+          });
+        }
+
+        function fetchAvailableGames() {
+          var results = document.getElementById('available');
+          fetch(availableGamesUrl, (xhr)=> {
+            if (xhr.responseType === 'json') {
+                var objects = xhr.response;
+                var filteredGames = objects.filter(function(game) {
+                  return game.creator.id != currentUser.id
+                  });
+                var items = new Array()
+                for (i = 0; i < filteredGames.length; i++) { 
+                  var game = filteredGames[i];
+                  items.push(createGameItem(game.id, game.creator.username, "???", "Play"))
+                }
+                if(!items.length) {
+                  results.innerHTML = "No Games"
+                } else {
+                  results.innerHTML = items.join('\n')
+                }
+            } else {
+                results.innerHTML = JSON.parse(xhr.responseText).message;
+            }
+          });
+        }
+
+        function fetch(url, callback) {
+          var oReq = new XMLHttpRequest();
+          oReq.onload = function (e) {
+            var xhr = e.target;
+            callback(xhr);
+          };
+          oReq.open('GET', url, true);
+          oReq.responseType = 'json';
+          oReq.send();
+        }
+
+        function oponentName(game) {
+          console.log(game)
+          if (game.opponent != null){
+            return game.opponent.username
+          } else {
+            return "???"
+          }
+        }
+
+        function buttonText(game) {
+          if (game.completed){
+            return "View"
+         } else if (game.opponent == null && game.creator.id == game.creator.id){
+             return "Waiting..."
+         } else{
+             return "Play"
+         }
+        }
+
+        function createGameItem(id,username,opName, buttonText){
+          return [
+           '<li key="'+id+'" class="list-group-item">',
+           '<span class="float-left badge badge-pill badge-secondary">'+id+'</span>&nbsp;&nbsp;',
+           '<span>'+username+'</span> vs '+opName,
+           '<a class="btn btn-sm btn-primary float-right" href="/game/'+id+'/"}>'+buttonText+'</a>',
+           '</li>'
+          ].join('\n');
+          }
+
+        function OnCreateClick(event) {
+          chatSocket.send(JSON.stringify({action: "create_game"}));
+        }
+        
+  </script>
+{% endblock %}
